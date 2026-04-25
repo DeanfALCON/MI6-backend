@@ -110,7 +110,19 @@ Important:
       ]
     });
 
-  const text = response.output_text;
+ const text = response.output[0].content[0].text;  
+    let text;
+
+try {
+  text = response.output[0].content[0].text;
+} catch (e) {
+  console.error("❌ AI response structure error:", response);
+
+  return res.status(500).json({
+    success: false,
+    error: "AI response format error"
+  });
+}
 
 console.log("AI RAW RESPONSE:", text);
 
