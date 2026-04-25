@@ -111,7 +111,28 @@ Important:
     });
 
     const text = response.output_text;
-    const data = safeJsonParse(text);
+   let data;
+
+try {
+  data = safeJsonParse(text);
+} catch (err) {
+  console.error("JSON parse failed:", text);
+
+  return res.json({
+    success: true,
+    fallback: true,
+    analysis_text: "AI返回格式异常，使用保底结果",
+    mi6: {
+      candlestick: 0,
+      chartpattern: 0,
+      wave: 0,
+      ma: 0,
+      bb: 0,
+      fibo: 0
+    },
+    suggested_result: "NO TRADE"
+  });
+}
 
     res.json(data);
   } catch (error) {
