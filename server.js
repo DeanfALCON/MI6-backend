@@ -110,7 +110,6 @@ Important:
       ]
     });
 
- const text = response.output[0].content[0].text;  
     let text;
 
 try {
