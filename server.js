@@ -110,7 +110,7 @@ Important:
       ]
     });
 
-    const text = response.output_text;
+    console.log("AI RAW RESPONSE:", text);
    let data;
 
 try {
