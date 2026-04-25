@@ -110,8 +110,11 @@ Important:
       ]
     });
 
-    console.log("AI RAW RESPONSE:", text);
-   let data;
+  const text = response.output_text;
+
+console.log("AI RAW RESPONSE:", text);
+
+let data;
 
 try {
   data = safeJsonParse(text);
