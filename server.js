@@ -132,20 +132,37 @@ try {
 } catch (err) {
   console.error("JSON parse failed:", text);
 
-  return res.json({
-    success: true,
-    fallback: true,
-    analysis_text: "AI返回格式异常，使用保底结果",
-    mi6: {
-      candlestick: 0,
-      chartpattern: 0,
-      wave: 0,
-      ma: 0,
-      bb: 0,
-      fibo: 0
-    },
-    suggested_result: "NO TRADE"
-  });
+return res.json({
+  success: true,
+  fallback: true,
+  image_analysis: {
+    trend: "sideways",
+    structure_summary: "AI返回格式异常",
+    pattern_detected: "unknown",
+    notes: "使用安全模式"
+  },
+  analysis_text: "AI返回格式异常，使用保底结果",
+  mi6: {
+    candlestick: 0,
+    chartpattern: 0,
+    wave: 0,
+    ma: 0,
+    bb: 0,
+    fibo: 0
+  },
+  filters: {
+    structural: "no",
+    isolated: "yes",
+    session: "overlap",
+    atr: "normal"
+  },
+  audit: {
+    trigger: "no",
+    keyzone: "no",
+    trapzone: "yes"
+  },
+  suggested_result: "NO TRADE"
+});
 }
 
     res.json(data);
