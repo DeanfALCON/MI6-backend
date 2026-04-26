@@ -182,17 +182,25 @@ analysis_text must be Chinese, concise, practical.
       }
     });
 
-    const text = response.output_text;
+   let data;
 
-    if (!text) {
-      console.error("AI empty response:", response);
-      return res.json(fallbackResult("AI没有返回内容，使用保底分析"));
-    }
+try {
+  if (response.output_parsed) {
+    data = response.output_parsed;
+  } else if (response.output_text) {
+    console.log("AI RAW RESPONSE:", response.output_text);
+    data = JSON.parse(response.output_text);
+  } else {
+    throw new Error("No valid AI output");
+  }
+} catch (err) {
+  console.error("JSON parse failed:", err);
+  console.error("FULL AI RESPONSE:", JSON.stringify(response, null, 2));
 
-    console.log("AI RAW RESPONSE:", text);
+  return res.json(fallbackResult("AI解析失败，使用保底分析"));
+}
 
-    const data = JSON.parse(text);
-    return res.json(data);
+return res.json(data);
   } catch (error) {
     console.error("AI chart analysis failed:", error);
 
