@@ -17,72 +17,48 @@ app.get("/", (req, res) => {
   res.send("MI6 AI Backend is running");
 });
 
-const mi6Schema = {
-  type: "object",
-  additionalProperties: false,
-  properties: {
-    success: { type: "boolean" },
+function safeJsonParse(text) {
+  const cleaned = text
+    .replace(/```json/g, "")
+    .replace(/```/g, "")
+    .trim();
+
+  return JSON.parse(cleaned);
+}
+
+function fallbackResult(reason = "AI暂时不可用，使用系统保底分析") {
+  return {
+    success: true,
+    fallback: true,
     image_analysis: {
-      type: "object",
-      additionalProperties: false,
-      properties: {
-        trend: { type: "string", enum: ["up", "down", "sideways"] },
-        structure_summary: { type: "string" },
-        pattern_detected: { type: "string" },
-        notes: { type: "string" }
-      },
-      required: ["trend", "structure_summary", "pattern_detected", "notes"]
+      trend: "sideways",
+      structure_summary: "AI fallback mode",
+      pattern_detected: "unknown",
+      notes: reason
     },
     mi6: {
-      type: "object",
-      additionalProperties: false,
-      properties: {
-        candlestick: { type: "integer", enum: [0, 1] },
-        chartpattern: { type: "integer", enum: [0, 1] },
-        wave: { type: "integer", enum: [0, 1] },
-        ma: { type: "integer", enum: [0, 1] },
-        bb: { type: "integer", enum: [0, 1] },
-        fibo: { type: "integer", enum: [0, 1] }
-      },
-      required: ["candlestick", "chartpattern", "wave", "ma", "bb", "fibo"]
+      candlestick: 0,
+      chartpattern: 0,
+      wave: 0,
+      ma: 0,
+      bb: 0,
+      fibo: 0
     },
     filters: {
-      type: "object",
-      additionalProperties: false,
-      properties: {
-        structural: { type: "string", enum: ["yes", "no"] },
-        isolated: { type: "string", enum: ["yes", "no"] },
-        session: { type: "string", enum: ["asia", "london", "newyork", "overlap"] },
-        atr: { type: "string", enum: ["low", "normal", "high"] }
-      },
-      required: ["structural", "isolated", "session", "atr"]
+      structural: "no",
+      isolated: "yes",
+      session: "overlap",
+      atr: "normal"
     },
     audit: {
-      type: "object",
-      additionalProperties: false,
-      properties: {
-        trigger: { type: "string", enum: ["yes", "no"] },
-        keyzone: { type: "string", enum: ["yes", "no"] },
-        trapzone: { type: "string", enum: ["yes", "no"] }
-      },
-      required: ["trigger", "keyzone", "trapzone"]
+      trigger: "no",
+      keyzone: "no",
+      trapzone: "yes"
     },
-    analysis_text: { type: "string" },
-    suggested_result: {
-      type: "string",
-      enum: ["STRONG TRADE", "TRADE", "WATCH", "NO TRADE", "BLOCK"]
-    }
-  },
-  required: [
-    "success",
-    "image_analysis",
-    "mi6",
-    "filters",
-    "audit",
-    "analysis_text",
-    "suggested_result"
-  ]
-};
+    analysis_text: reason,
+    suggested_result: "NO TRADE"
+  };
+}
 
 app.post("/api/analyze-chart", upload.single("image"), async (req, res) => {
   try {
@@ -108,23 +84,46 @@ Timeframe: ${timeframe || "unknown"}
 
 Analyze the uploaded trading chart image.
 
-Return a conservative MI6 trading analysis.
+Return ONLY pure JSON. No markdown. No explanation outside JSON.
 
-MI6 scoring rules:
-1. Candlestick Pattern = clear candle trigger.
-2. Chart Pattern = clear channel, triangle, breakout, support/resistance, reversal or continuation structure.
-3. Wave = visible wave structure aligned with user direction.
-4. MA = moving average supports user direction.
-5. Bollinger Band = price position supports user direction.
-6. Fibo = price near meaningful fibo zone or fibo extension/retracement supports user direction.
+Use this exact JSON structure:
+{
+  "success": true,
+  "image_analysis": {
+    "trend": "up | down | sideways",
+    "structure_summary": "short summary",
+    "pattern_detected": "short pattern name",
+    "notes": "short notes"
+  },
+  "mi6": {
+    "candlestick": 0,
+    "chartpattern": 0,
+    "wave": 0,
+    "ma": 0,
+    "bb": 0,
+    "fibo": 0
+  },
+  "filters": {
+    "structural": "yes | no",
+    "isolated": "yes | no",
+    "session": "asia | london | newyork | overlap",
+    "atr": "low | normal | high"
+  },
+  "audit": {
+    "trigger": "yes | no",
+    "keyzone": "yes | no",
+    "trapzone": "yes | no"
+  },
+  "analysis_text": "Chinese explanation for user",
+  "suggested_result": "STRONG TRADE | TRADE | WATCH | NO TRADE | BLOCK"
+}
 
-Important:
+Rules:
 - Be conservative.
-- If chart is unclear, set uncertain items to 0.
+- If unclear, score uncertain items as 0.
 - If selected direction conflicts with trend, structural = "no".
 - If no clear trigger, audit.trigger = "no".
-- If price is too close to obvious trap/resistance/support against the selected direction, trapzone = "yes".
-- analysis_text must be Chinese, concise, practical, and explain why.
+- analysis_text must be Chinese, concise, and practical.
 `;
 
     const response = await client.responses.create({
@@ -140,15 +139,7 @@ Important:
             }
           ]
         }
-      ],
-      text: {
-        format: {
-          type: "json_schema",
-          name: "mi6_chart_analysis",
-          schema: mi6Schema,
-          strict: true
-        }
-      }
+      ]
     });
 
     let text = "";
@@ -167,60 +158,32 @@ Important:
 
     if (!text) {
       console.error("AI empty response:", response);
-      return res.status(500).json({
-        success: false,
-        error: "AI empty response"
-      });
+      return res.json(fallbackResult("AI没有返回内容，使用保底结果"));
     }
 
     console.log("AI RAW RESPONSE:", text);
 
-    const data = JSON.parse(text);
-    res.json(data);
+    let data;
+
+    try {
+      data = safeJsonParse(text);
+    } catch (err) {
+      console.error("JSON parse failed:", text);
+      return res.json(fallbackResult("AI返回格式异常，使用保底结果"));
+    }
+
+    return res.json(data);
   } catch (error) {
-  console.error("AI chart analysis failed:", error);
+    console.error("AI chart analysis failed:", error);
 
-  // 🔥 额度不足 fallback
-  if (error.code === "insufficient_quota") {
-    return res.json({
-      success: true,
-      fallback: true,
-      analysis_text: "AI额度不足，使用系统分析（保底模式）",
-      image_analysis: {
-        trend: "up",
-        structure_summary: "默认结构分析",
-        pattern_detected: "channel",
-        notes: "AI未启用"
-      },
-      mi6: {
-        candlestick: 1,
-        chartpattern: 1,
-        wave: 1,
-        ma: 1,
-        bb: 0,
-        fibo: 1
-      },
-      filters: {
-        structural: "yes",
-        isolated: "yes",
-        session: "overlap",
-        atr: "normal"
-      },
-      audit: {
-        trigger: "yes",
-        keyzone: "yes",
-        trapzone: "no"
-      },
-      suggested_result: "WATCH"
+    if (error.code === "insufficient_quota") {
+      return res.json(fallbackResult("AI额度不足，使用系统保底分析"));
+    }
+
+    return res.status(500).json({
+      success: false,
+      error: "AI chart analysis failed"
     });
-  }
-
-  // 🔥 其他错误 fallback
-  return res.status(500).json({
-    success: false,
-    error: "AI chart analysis failed"
-  });
-}
   }
 });
 
