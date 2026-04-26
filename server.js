@@ -163,20 +163,60 @@ Important:
 `;
 
     const response = await client.responses.create({
-      model: "gpt-4.1-mini",
-      input: [
-        {
-          role: "user",
-          content: [
-            { type: "input_text", text: prompt },
-            {
-              type: "input_image",
-              image_url: `data:${mimeType};base64,${imageBase64}`
+  model: "gpt-4.1-mini",
+
+  response_format: {
+    type: "json_schema",
+    json_schema: {
+      name: "mi6_result",
+      schema: {
+        type: "object",
+        properties: {
+          success: { type: "boolean" },
+          image_analysis: {
+            type: "object",
+            properties: {
+              trend: { type: "string" },
+              structure_summary: { type: "string" },
+              pattern_detected: { type: "string" },
+              notes: { type: "string" }
+            },
+            required: ["trend"]
+          },
+          mi6: {
+            type: "object",
+            properties: {
+              candlestick: { type: "number" },
+              chartpattern: { type: "number" },
+              wave: { type: "number" },
+              ma: { type: "number" },
+              bb: { type: "number" },
+              fibo: { type: "number" }
             }
-          ]
+          },
+          filters: { type: "object" },
+          audit: { type: "object" },
+          analysis_text: { type: "string" },
+          suggested_result: { type: "string" }
+        },
+        required: ["success", "mi6"]
+      }
+    }
+  },
+
+  input: [
+    {
+      role: "user",
+      content: [
+        { type: "input_text", text: prompt },
+        {
+          type: "input_image",
+          image_url: `data:${mimeType};base64,${imageBase64}`
         }
       ]
-    });
+    }
+  ]
+});
 
     let text = "";
 
