@@ -17,17 +17,82 @@ app.get("/", (req, res) => {
   res.send("MI6 AI Backend is running");
 });
 
-function safeJsonParse(text) {
-  const cleaned = text
-    .replace(/```json/g, "")
-    .replace(/```/g, "")
-    .trim();
-
-  return JSON.parse(cleaned);
-}
+const mi6Schema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    success: { type: "boolean" },
+    image_analysis: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        trend: { type: "string", enum: ["up", "down", "sideways"] },
+        structure_summary: { type: "string" },
+        pattern_detected: { type: "string" },
+        notes: { type: "string" }
+      },
+      required: ["trend", "structure_summary", "pattern_detected", "notes"]
+    },
+    mi6: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        candlestick: { type: "integer", enum: [0, 1] },
+        chartpattern: { type: "integer", enum: [0, 1] },
+        wave: { type: "integer", enum: [0, 1] },
+        ma: { type: "integer", enum: [0, 1] },
+        bb: { type: "integer", enum: [0, 1] },
+        fibo: { type: "integer", enum: [0, 1] }
+      },
+      required: ["candlestick", "chartpattern", "wave", "ma", "bb", "fibo"]
+    },
+    filters: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        structural: { type: "string", enum: ["yes", "no"] },
+        isolated: { type: "string", enum: ["yes", "no"] },
+        session: { type: "string", enum: ["asia", "london", "newyork", "overlap"] },
+        atr: { type: "string", enum: ["low", "normal", "high"] }
+      },
+      required: ["structural", "isolated", "session", "atr"]
+    },
+    audit: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        trigger: { type: "string", enum: ["yes", "no"] },
+        keyzone: { type: "string", enum: ["yes", "no"] },
+        trapzone: { type: "string", enum: ["yes", "no"] }
+      },
+      required: ["trigger", "keyzone", "trapzone"]
+    },
+    analysis_text: { type: "string" },
+    suggested_result: {
+      type: "string",
+      enum: ["STRONG TRADE", "TRADE", "WATCH", "NO TRADE", "BLOCK"]
+    }
+  },
+  required: [
+    "success",
+    "image_analysis",
+    "mi6",
+    "filters",
+    "audit",
+    "analysis_text",
+    "suggested_result"
+  ]
+};
 
 app.post("/api/analyze-chart", upload.single("image"), async (req, res) => {
   try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: "No image uploaded"
+      });
+    }
+
     const direction = req.body.direction || "BUY";
     const symbol = req.body.symbol || "";
     const timeframe = req.body.timeframe || "";
@@ -43,39 +108,7 @@ Timeframe: ${timeframe || "unknown"}
 
 Analyze the uploaded trading chart image.
 
-Return ONLY valid JSON. No markdown.
-
-Use this exact JSON structure:
-{
-  "success": true,
-  "image_analysis": {
-    "trend": "up | down | sideways",
-    "structure_summary": "short summary",
-    "pattern_detected": "short pattern name",
-    "notes": "short notes"
-  },
-  "mi6": {
-    "candlestick": 0,
-    "chartpattern": 0,
-    "wave": 0,
-    "ma": 0,
-    "bb": 0,
-    "fibo": 0
-  },
-  "filters": {
-    "structural": "yes | no",
-    "isolated": "yes | no",
-    "session": "asia | london | newyork | overlap",
-    "atr": "low | normal | high"
-  },
-  "audit": {
-    "trigger": "yes | no",
-    "keyzone": "yes | no",
-    "trapzone": "yes | no"
-  },
-  "analysis_text": "Chinese explanation for user",
-  "suggested_result": "STRONG TRADE | TRADE | WATCH | NO TRADE | BLOCK"
-}
+Return a conservative MI6 trading analysis.
 
 MI6 scoring rules:
 1. Candlestick Pattern = clear candle trigger.
@@ -91,7 +124,7 @@ Important:
 - If selected direction conflicts with trend, structural = "no".
 - If no clear trigger, audit.trigger = "no".
 - If price is too close to obvious trap/resistance/support against the selected direction, trapzone = "yes".
-- analysis_text must be in Chinese, concise, practical, and explain why.
+- analysis_text must be Chinese, concise, practical, and explain why.
 `;
 
     const response = await client.responses.create({
@@ -107,67 +140,45 @@ Important:
             }
           ]
         }
-      ]
+      ],
+      text: {
+        format: {
+          type: "json_schema",
+          name: "mi6_chart_analysis",
+          schema: mi6Schema,
+          strict: true
+        }
+      }
     });
 
-    let text;
+    let text = "";
 
-try {
-  text = response.output[0].content[0].text;
-} catch (e) {
-  console.error("❌ AI response structure error:", response);
+    if (response.output_text) {
+      text = response.output_text;
+    } else if (
+      response.output &&
+      response.output[0] &&
+      response.output[0].content &&
+      response.output[0].content[0]
+    ) {
+      const content = response.output[0].content[0];
+      text = content.text || content.text?.value || "";
+    }
 
-  return res.status(500).json({
-    success: false,
-    error: "AI response format error"
-  });
-}
+    if (!text) {
+      console.error("AI empty response:", response);
+      return res.status(500).json({
+        success: false,
+        error: "AI empty response"
+      });
+    }
 
-console.log("AI RAW RESPONSE:", text);
+    console.log("AI RAW RESPONSE:", text);
 
-let data;
-
-try {
-  data = safeJsonParse(text);
-} catch (err) {
-  console.error("JSON parse failed:", text);
-
-return res.json({
-  success: true,
-  fallback: true,
-  image_analysis: {
-    trend: "sideways",
-    structure_summary: "AI返回格式异常",
-    pattern_detected: "unknown",
-    notes: "使用安全模式"
-  },
-  analysis_text: "AI返回格式异常，使用保底结果",
-  mi6: {
-    candlestick: 0,
-    chartpattern: 0,
-    wave: 0,
-    ma: 0,
-    bb: 0,
-    fibo: 0
-  },
-  filters: {
-    structural: "no",
-    isolated: "yes",
-    session: "overlap",
-    atr: "normal"
-  },
-  audit: {
-    trigger: "no",
-    keyzone: "no",
-    trapzone: "yes"
-  },
-  suggested_result: "NO TRADE"
-});
-}
-
+    const data = JSON.parse(text);
     res.json(data);
   } catch (error) {
-    console.error(error);
+    console.error("AI chart analysis failed:", error);
 
     res.status(500).json({
       success: false,
