@@ -178,26 +178,47 @@ Important:
     const data = JSON.parse(text);
     res.json(data);
   } catch (error) {
-    console.error("AI chart analysis failed:", error);
+  console.error("AI chart analysis failed:", error);
 
-    res.status(500).json({
-      success: false,
-      error: "AI chart analysis failed"
+  // 🔥 额度不足 fallback
+  if (error.code === "insufficient_quota") {
+    return res.json({
+      success: true,
+      fallback: true,
+      analysis_text: "AI额度不足，使用系统分析（保底模式）",
+      image_analysis: {
+        trend: "up",
+        structure_summary: "默认结构分析",
+        pattern_detected: "channel",
+        notes: "AI未启用"
+      },
+      mi6: {
+        candlestick: 1,
+        chartpattern: 1,
+        wave: 1,
+        ma: 1,
+        bb: 0,
+        fibo: 1
+      },
+      filters: {
+        structural: "yes",
+        isolated: "yes",
+        session: "overlap",
+        atr: "normal"
+      },
+      audit: {
+        trigger: "yes",
+        keyzone: "yes",
+        trapzone: "no"
+      },
+      suggested_result: "WATCH"
     });
-    if (error.code === "insufficient_quota") {
-  return res.json({
-    success: true,
-    fallback: true,
-    analysis_text: "AI暂时不可用（额度不足），使用系统分析",
-    mi6: {
-      candlestick: 1,
-      chartpattern: 1,
-      wave: 1,
-      ma: 1,
-      bb: 0,
-      fibo: 1
-    },
-    suggested_result: "WATCH"
+  }
+
+  // 🔥 其他错误 fallback
+  return res.status(500).json({
+    success: false,
+    error: "AI chart analysis failed"
   });
 }
   }
