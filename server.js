@@ -158,7 +158,7 @@ If no clear trigger, trigger = "no".
 analysis_text must be Chinese, concise, practical.
 `;
 
-    const response = await client.responses.create({
+    const response = await client.responses.parse({
       model: "gpt-4.1-mini",
       input: [
         {
@@ -182,25 +182,15 @@ analysis_text must be Chinese, concise, practical.
       }
     });
 
-   let data;
+   const data = response.output_parsed;
 
-try {
-  if (response.output_parsed) {
-    data = response.output_parsed;
-  } else if (response.output_text) {
-    console.log("AI RAW RESPONSE:", response.output_text);
-    data = JSON.parse(response.output_text);
-  } else {
-    throw new Error("No valid AI output");
-  }
-} catch (err) {
-  console.error("JSON parse failed:", err);
-  console.error("FULL AI RESPONSE:", JSON.stringify(response, null, 2));
-
-  return res.json(fallbackResult("AI解析失败，使用保底分析"));
+if (!data) {
+  console.error("AI parsed output empty:", JSON.stringify(response, null, 2));
+  return res.json(fallbackResult("AI解析为空，使用保底分析"));
 }
 
 return res.json(data);
+    
   } catch (error) {
     console.error("AI chart analysis failed:", error);
 
