@@ -184,6 +184,22 @@ Important:
       success: false,
       error: "AI chart analysis failed"
     });
+    if (error.code === "insufficient_quota") {
+  return res.json({
+    success: true,
+    fallback: true,
+    analysis_text: "AI暂时不可用（额度不足），使用系统分析",
+    mi6: {
+      candlestick: 1,
+      chartpattern: 1,
+      wave: 1,
+      ma: 1,
+      bb: 0,
+      fibo: 1
+    },
+    suggested_result: "WATCH"
+  });
+}
   }
 });
 
